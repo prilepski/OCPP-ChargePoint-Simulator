@@ -68,6 +68,14 @@ function getSessionKey(key,default_value="") {
 }
 
 //
+// Remove session key
+// @param key The key name
+//
+function removeSessionKey(key) {
+    sessionStorage.removeItem(key);
+}
+
+//
 // Store a key value in local storage
 // @param key The key name
 // @param value The key value
@@ -154,15 +162,19 @@ export default class ChargePoint {
             this._statusChangeCb(s,msg);
         }
     }
+
+    getStatus() {
+        return getSessionKey(ocpp.KEY_CP_STATUS);
+    }
     
     //
     // Handle a command coming from the OCPP server
     //
     handleCallRequest(id,request,payload) {
-        var respOk = JSON.stringify([3,id,{"status": "Accepted"}]);
+        var respOk = JSON.stringify([3,id,{"status": ocpp.STATE_ACCEPTED}]);
         var connectorId=0;
         switch (request) {
-            case "Reset":
+            case ocpp.REQUEST_RESET:
                 //Reset type can be SOFT, HARD
                 var rstType=payload.type;
                 this.logMsg("Reset Request: type="+rstType);
@@ -170,7 +182,7 @@ export default class ChargePoint {
                 this.wsDisconnect();
                 break;
 
-            case "RemoteStartTransaction":
+            case ocpp.REQUEST_REMOTE_START_TRANSACTION:
                 console.log("RemoteStartTransaction");
                 //Need to get idTag, connectorId (map - ddata[3])
                 var tagId = payload.idTag;
@@ -179,14 +191,14 @@ export default class ChargePoint {
                 this.startTransaction(tagId);
                 break;
 
-            case "RemoteStopTransaction":
+            case ocpp.REQUEST_REMOTE_STOP_TRANSACTION:
                 var stop_id = payload.transactionId;
                 this.logMsg("Reception of a RemoteStopTransaction request for transaction "+stop_id);
                 this.wsSendData(respOk);
                 this.stopTransactionWithId(stop_id);
                 break;
 
-            case "TriggerMessage":
+            case ocpp.REQUEST_TRIGGER_MESSAGE:
                 var requestedMessage = payload.requestedMessage;
                 // connectorId is optionnal thus must check if it is provided
                 if(payload["connectorId"]) { 
@@ -197,7 +209,7 @@ export default class ChargePoint {
                 this.triggerMessage(requestedMessage,connectorId);
                 break;
                 
-            case "ChangeAvailability":
+            case ocpp.REQUEST_CHANGE_AVAILABILITY:
                 var avail=payload.type;
                 connectorId=payload.connectorId;
                 this.logMsg("Reception of a ChangeAvailability request (connector "+connectorId+" "+avail+")");
@@ -205,16 +217,77 @@ export default class ChargePoint {
                 this.setConnectorAvailability(Number(connectorId),avail)
                 break;
                 
-            case "UnlockConnector":
-                this.wsSendData(respOk);
+            case ocpp.REQUEST_UNLOCK_CONNECTOR:
+                connectorId = payload.connectorId;
+                var response = JSON.stringify([3,id,{"status": getSessionKey(ocpp.KEY_UNLOCK_CONNECTOR_RESPONSE + connectorId)}]);
+
+                this.wsSendData(response);
                 // connector_locked = false;
                 // $('.indicator').hide();
                 //$('#yellow').show();
                 //logMsg("Connector status changed to: "+connector_locked);
                 break;
 
+            case ocpp.REQUEST_RESERVE_NOW:
+                connectorId=payload.connectorId;
+                var connectorState = this.connectorStatus(connectorId);
+                if (getSessionKey(ocpp.KEY_RESERVATIONS_SUPPORTED) == ocpp.STATE_REJECTED || 
+                    0 == connectorId) {
+                    // Send rejection if reservations are not supported or reject if reservation of connector 0 is requested (not supported)
+                    var respRejected = JSON.stringify([3,id,{"status": ocpp.STATE_REJECTED}]);
+                    this.wsSendData(respRejected);
+                }
+                else if (ocpp.CONN_FAULTED == connectorState || ocpp.CONN_FAULTED == getSessionKey(ocpp.KEY_CP_STATUS)){
+                    // Send Faulted message
+                    var respFaulted = JSON.stringify([3,id,{"status": ocpp.STATE_FAULTED}]);
+                    this.wsSendData(respFaulted);                    
+                }
+                else if (connectorState == ocpp.CONN_RESERVED || connectorState == ocpp.CONN_CHARGING) {
+                    var respOccupied = JSON.stringify([3,id,{"status": ocpp.STATE_OCCUPIED}]);
+                    this.wsSendData(respOccupied);                    
+                }
+                else {
+                    this.wsSendData(respOk);
+                    this.setConnectorStatus(Number(connectorId), ocpp.CONN_RESERVED, true);
+                    this.setStatus(ocpp.CONN_RESERVED);
+                    setSessionKey(ocpp.KEY_ACTIVE_RESERVATION + connectorId, payload.reservationId);
+                }
+                break;
+            
+            case ocpp.REQUEST_CANCEL_RESERVATION:
+                var connectorId = 0;
+                if (payload.reservationId == getSessionKey(ocpp.KEY_ACTIVE_RESERVATION + "1")) {
+                    removeSessionKey(ocpp.KEY_ACTIVE_RESERVATION + "1");
+                    connectorId = 1;
+                }
+                else if (payload.reservationId == getSessionKey(ocpp.KEY_ACTIVE_RESERVATION + "2")) {
+                    connectorId = 2;
+                    removeSessionKey(ocpp.KEY_ACTIVE_RESERVATION + "2");
+                }
+                if (0 == connectorId) {
+                    // No reservation was found
+                    var respRejected = JSON.stringify([3,id,{"status": ocpp.STATE_REJECTED}]);
+                    this.wsSendData(respRejected);
+                }
+                else {
+                    this.wsSendData(respOk);
+                    this.setConnectorStatus(connectorId, ocpp.CONN_AVAILABLE, true);
+                    this.setStatus(ocpp.CONN_AVAILABLE);
+                }
+                break;
+            
+            case ocpp.REQUEST_UPDATE_FIRMWARE:
+                this.logMsg("Reception of a UpdateFirmware request");
+                this.handleRequest(id, ocpp.KEY_FW_UPDATE_RESPONSE);
+                break;
+
+            case ocpp.REQUEST_GET_DIAGNOSTICS:
+                this.logMsg("Reception of a GetDiagnostics request");
+                this.handleRequest(id, ocpp.KEY_GET_DIAGNOSTICS_RESPONSE);
+                break;
+    
             default:
-                var error = JSON.stringify([4,id,"NotImplemented"]);
+                var error = JSON.stringify([4,id,ocpp.REQUEST_NOT_IMPLEMENTED]);
                 this.wsSendData(error);
                 break;
         }
@@ -222,37 +295,79 @@ export default class ChargePoint {
 
     //
     // Handle the response from the OCPP server to a command 
+    // @param id - response id
     // @param payload The payload part of the OCPP message
     //
-    handleCallResult(payload) {
-        var la = this.getLastAction();
-        if (la == "BootNotification") {
-            if (payload.status == 'Accepted') {
-                this.logMsg("Connection accepted");
-                var hb_interval = payload.interval;
-                this.setHeartbeat(hb_interval);
-                this.setStatus(ocpp.CP_CONNECTED);
-            }
-            else {
-                this.logMsg("Connection refused by server");
-                this.wsDisconnect();
-            }
+    handleCallResult(id, payload) {
+        var message = getSessionKey(id);
+        var ddata = (JSON.parse(message));
+
+        // process response according to a request type that was posted
+        this.logMsg(ddata[ocpp.MSG_REQ_TYPE_INDEX] + " response received");
+        switch (ddata[ocpp.MSG_REQ_TYPE_INDEX]) {
+            case ocpp.REQUEST_HEARTBEAT:
+            case ocpp.REQUEST_FIRMWARE_STATUS_NOTIFICATION:
+            case ocpp.REQUEST_DIAGNOSTICS_STATUS_NOTIFICATION:
+            case ocpp.REQUEST_DATA_TRANSFER:
+                // no further actions needed here
+                break;
+            case ocpp.REQUEST_START_TRANSACTION:
+                var transactionId = payload.transactionId;
+                var connectorId = ddata[ocpp.MSG_REQ_JSON_INDEX].connectorId;
+
+                setSessionKey(ocpp.KEY_ACTIVE_TRANSACTION_ID + connectorId, transactionId);
+                this.setConnectorStatus(connectorId, ocpp.CONN_CHARGING);
+                this.setStatus(ocpp.CP_INTRANSACTION, message);
+                this.logMsg("Transaction id is " + transactionId);
+                break;
+            case ocpp.REQUEST_STOP_TRANSACTION:
+                var transactionId = ddata[ocpp.MSG_REQ_JSON_INDEX].transactionId;
+                // find what connector runs charging with this transactionId
+                var connectorId = 0;
+                if (transactionId == getSessionKey(ocpp.KEY_ACTIVE_TRANSACTION_ID + "1"))
+                    connectorId = 1;
+                else if (transactionId == getSessionKey(ocpp.KEY_ACTIVE_TRANSACTION_ID + "2"))
+                    connectorId = 2;
+                else {
+                    this.logMsg("Could not identify connector running charging session with transaction ID = " + transactionId);
+                    break;
+                }
+                this.setConnectorStatus(connectorId, ocpp.CONN_AVAILABLE);
+
+                if (ocpp.CONN_CHARGING == this.connectorStatus(1) || ocpp.CONN_CHARGING == this.connectorStatus(2))
+                    this.setStatus(ocpp.CP_INTRANSACTION, message);
+                else
+                    this.setStatus(ocpp.CP_AUTHORIZED, message);
+
+                this.logMsg("Charging with transaction id " + transactionId + " stopped");
+                removeSessionKey(ocpp.KEY_ACTIVE_TRANSACTION_ID + connectorId);
+                break;
+            case ocpp.REQUEST_BOOT_NOTIFICATION:
+                if (payload.status == 'Accepted') {
+                    this.logMsg("Connection accepted");
+                    var hb_interval = payload.interval;
+                    this.setHeartbeat(hb_interval);
+                    this.setStatus(ocpp.CP_CONNECTED);
+                }
+                else {
+                    this.logMsg("Connection refused by server");
+                    this.wsDisconnect();
+                }
+                break;
+            case ocpp.REQUEST_AUTHORIZE:
+                if (payload.idTagInfo.status == 'Invalid') {
+                    this.logMsg('Authorization failed');
+                }
+                else {
+                    this.logMsg('Authorization OK');
+                    this.setStatus(ocpp.CP_AUTHORIZED);
+                }
+                break;
+            default:
+                this.logMsg("Unknown / Unsupported request type: " + ddata[ocpp.MSG_REQ_TYPE_INDEX]);
         }
-        else if (la == "Authorize") {
-            if (payload.idTagInfo.status == 'Invalid') {
-                this.logMsg('Authorization failed');
-            }
-            else {
-                this.logMsg('Authorization OK');
-                this.setStatus(ocpp.CP_AUTHORIZED);
-            } 
-        }
-        else if (la == "startTransaction") {
-            var transactionId = payload.transactionId;
-            setSessionKey('TransactionId',transactionId);
-            this.setStatus(ocpp.CP_INTRANSACTION,'TransactionId: '+transactionId)
-            this.logMsg("Transaction id is "+transactionId);
-        }
+
+        removeSessionKey(id);
     }
 
     //
@@ -269,10 +384,9 @@ export default class ChargePoint {
     // @param tagId the id of the RFID tag to authorize
     //
     authorize(tagId){
-        this.setLastAction("Authorize");
         this.logMsg("Requesting authorization for tag " + tagId);
         var id=generateId();
-        var Auth = JSON.stringify([2,id,"Authorize", {
+        var Auth = JSON.stringify([2,id,ocpp.REQUEST_AUTHORIZE, {
             "idTag": tagId
         }]);
         this.wsSendData(Auth);
@@ -282,12 +396,12 @@ export default class ChargePoint {
     // Send a StartTransaction call to the OCPP Server
     // @param tagId the id of the RFID tag currently authorized on the CP
     //
-    startTransaction(tagId,connectorId=1,reservationId=0){
-        this.setLastAction("startTransaction");
-        this.setStatus(ocpp.CP_INTRANSACTION);
-        var mv = this.meterValue();
+    startTransaction(tagId,connectorId=1){
+        var mv = this.meterValue(connectorId);
+        var reservationId = getSessionKey(ocpp.KEY_ACTIVE_RESERVATION + connectorId);
+
         var id=generateId();
-        var strtT = JSON.stringify([2,id,"StartTransaction", {
+        var strtT = JSON.stringify([2,id,ocpp.REQUEST_START_TRANSACTION, {
             "connectorId": connectorId,
             "idTag": tagId,
             "timestamp": formatDate(new Date()),
@@ -296,15 +410,20 @@ export default class ChargePoint {
         }]);
         this.logMsg("Starting Transaction for tag "+tagId+" (connector:"+connectorId+", meter value="+mv+")");
         this.wsSendData(strtT);
-        this.setConnectorStatus(connectorId,ocpp.CONN_CHARGING);
     }
 
     //
     // Send a StopTransaction call to the OCPP Server
     // @param tagId the id of the RFID tag currently authorized on the CP
     //
-    stopTransaction(tagId){
-        var transactionId=getSessionKey("TransactionId");
+    stopTransaction(tagId, connectorId = 1){
+        var transactionId=getSessionKey(ocpp.KEY_ACTIVE_TRANSACTION_ID + connectorId);
+
+        if (0 == transactionId.length) {
+            // no active transation to stop
+            this.logMsg("No active transaction to stop");
+            return;
+        }
         this.stopTransactionWithId(transactionId,tagId);
     }
     
@@ -314,8 +433,6 @@ export default class ChargePoint {
     // @param tagId the id of the RFID tag currently authorized on the CP
     //
     stopTransactionWithId(transactionId,tagId="DEADBEEF"){
-        this.setLastAction("stopTransaction");
-        this.setStatus(ocpp.CP_AUTHORIZED);
         var mv=this.meterValue();
         this.logMsg("Stopping Transaction with id "+transactionId+" (meterValue="+mv+")");
         var id=generateId();
@@ -326,9 +443,8 @@ export default class ChargePoint {
         if (!isEmpty(tagId)) {
             stopParams["idTag"]=tagId;
         }
-        var stpT = JSON.stringify([2, id, "StopTransaction",stopParams]);
+        var stpT = JSON.stringify([2, id, ocpp.REQUEST_STOP_TRANSACTION,stopParams]);
         this.wsSendData(stpT);
-        this.setConnectorStatus(1,ocpp.CONN_AVAILABLE);
     }
     
     //
@@ -338,7 +454,7 @@ export default class ChargePoint {
     //
     triggerMessage(requestedMessage,c=0) {
         switch(requestedMessage) {
-            case 'BootNotification':
+            case ocpp.REQUEST_BOOT_NOTIFICATION:
                 this.sendBootNotification();
                 break;
             case 'Heartbeat':
@@ -350,9 +466,11 @@ export default class ChargePoint {
             case 'StatusNotification':
                 this.sendStatusNotification(c);
                 break;
-            case 'DiagnosticStatusNotification':
+            case ocpp.REQUEST_FIRMWARE_STATUS_NOTIFICATION:
+                this.sendSelectedStatusNotification(getSessionKey(ocpp.KEY_FW_UPDATE_STATUS), ocpp.REQUEST_FIRMWARE_STATUS_NOTIFICATION);
                 break;
-            case 'FirmwareStatusNotification':
+            case ocpp.REQUEST_DIAGNOSTICS_STATUS_NOTIFICATION:
+                this.sendSelectedStatusNotification(getSessionKey(ocpp.KEY_DIAGNOSTICS_STATUS), ocpp.REQUEST_DIAGNOSTICS_STATUS_NOTIFICATION);
                 break;
             default:
                 this.logMsg("Requested Message not supported: "+requestedMessage);
@@ -365,9 +483,8 @@ export default class ChargePoint {
     //
     sendBootNotification(){
         this.logMsg('Sending BootNotification');
-        this.setLastAction("BootNotification");
         var id=generateId();
-        var bn_req = JSON.stringify([2, id, "BootNotification", {
+        var bn_req = JSON.stringify([2, id, ocpp.REQUEST_BOOT_NOTIFICATION, {
             "chargePointVendor": "Elmo",
             "chargePointModel": "Elmo-Virtual1",
             "chargePointSerialNumber": "elm.001.13.1",
@@ -381,15 +498,6 @@ export default class ChargePoint {
         this.wsSendData(bn_req);
     }
 
-    // @todo: Shitty code to remove asap => real transaction support
-    setLastAction(action) {
-        setSessionKey("LastAction",action);
-    }
-    // @todo: Shitty code to remove asap
-    getLastAction(){
-        return getSessionKey("LastAction");
-    }
-    
     //
     // Setup heartbeat sending at the appropriate period
     // (clearing any previous setup)
@@ -407,9 +515,8 @@ export default class ChargePoint {
     // Send a heartbeat to the OCPP Server
     //
     sendHeartbeat() {
-        this.setLastAction("Heartbeat");
         var id=generateId();
-        var HB = JSON.stringify([2,id,"Heartbeat", {}]);
+        var HB = JSON.stringify([2,id,ocpp.REQUEST_HEARTBEAT, {}]);
         this.logMsg('Heartbeat');
         this.wsSendData(HB);
     }
@@ -419,8 +526,13 @@ export default class ChargePoint {
     // @data the data to send 
     //
     wsSendData(data) {
-        console.log("SEND: "+data);
+        this.logMsg("SEND: "+data);
         if (this._websocket) {
+            // Store request key / request type pair
+            var ddata = (JSON.parse(data));
+            // store request (type=2) so that we can later match it with response (type=3)
+            if (ocpp.MSG_REQUEST == ddata[ocpp.MSG_TYPE_INDEX])
+                setSessionKey(ddata[ocpp.MSG_ID_INDEX], data);
             this._websocket.send(data);
         }
         else {
@@ -481,7 +593,8 @@ export default class ChargePoint {
             // Decode the type of message and pass it to the appropriate handler
             // 
             this._websocket.onmessage = function(msg) {
-                console.log("RECEIVE: "+msg.data);
+                //console.log("RECEIVE: "+msg.data);
+                self.logMsg("RECEIVE: "+msg.data);
                 var ddata = (JSON.parse(msg.data));
 
                 // Decrypt Message Type
@@ -497,7 +610,7 @@ export default class ChargePoint {
                         self.handleCallRequest(id,request,payload);
                         break;
                     case 3: // CALLRESULT 
-                        self.handleCallResult(ddata[2]);
+                        self.handleCallResult(ddata[1], ddata[2]);
                         break;
                     case 4: // CALLERROR
                         self.handleCallError(ddata[2],ddata[3]);
@@ -534,20 +647,22 @@ export default class ChargePoint {
     
     //
     // Return the meter value
+    // @param c - connector ID
     //
-    meterValue() {
-        return (getSessionKey(ocpp.KEY_METER_VALUE,"0"));
+    meterValue(c) {
+        return (getSessionKey(ocpp.KEY_METER_VALUE + c,"0"));
     }
     
     //
     // Set the meter value (and optionnally update the OCPP server with it)
     // @param v the new meter value
     // @param updateServer if set to true, update the server with the new meter value
+    // @param c - connector id
     //
-    setMeterValue(v,updateServer=false) {
-        setSessionKey(ocpp.KEY_METER_VALUE,v);
+    setMeterValue(v,updateServer=false, c = 1) {
+        setSessionKey(ocpp.KEY_METER_VALUE + c,v);
         if (updateServer) {
-            this.sendMeterValue();
+            this.sendMeterValue(c);
         }
     }
     
@@ -556,13 +671,14 @@ export default class ChargePoint {
     //
     sendMeterValue(c=0) {
         var mvreq={};
-        this.setLastAction("MeterValues");
-        var meter=getSessionKey(ocpp.KEY_METER_VALUE);
+        var ssid = getSessionKey(ocpp.KEY_ACTIVE_TRANSACTION_ID + c);
+
+        var meter=getSessionKey(ocpp.KEY_METER_VALUE + c);
         var id=generateId();
-        var ssid = getSessionKey('TransactionId');
-        mvreq = JSON.stringify([2, id, "MeterValues", {"connectorId": c, "transactionId": ssid, "meterValue": [{"timestamp": formatDate(new Date()), "sampledValue": [{"value": meter}]}]}]);
+
+        mvreq = JSON.stringify([2, id, ocpp.REQUEST_METER_VALUES, {"connectorId": c, "transactionId": ssid, "meterValue": [{"timestamp": formatDate(new Date()), "sampledValue": [{"value": meter}]}]}]);
         this.logMsg("Send Meter Values: "+meter+" (connector " +c+")");
-        this.wsSendData(mvreq);
+        this.wsSendData(mvreq);        
     }
     
     //
@@ -595,9 +711,8 @@ export default class ChargePoint {
     //
     sendStatusNotification(c) {
         var st=this.connectorStatus(c);
-        this.setLastAction("StatusNotification");
         var id=generateId();
-        var sn_req = JSON.stringify([2, id, "StatusNotification", {
+        var sn_req = JSON.stringify([2, id, ocpp.REQUEST_STATUS_NOTIFICATION, {
             "connectorId": c,
             "status": st,
             "errorCode": "NoError",
@@ -643,5 +758,110 @@ export default class ChargePoint {
             this.setConnectorAvailability(1,newAvailability);
             this.setConnectorAvailability(2,newAvailability);
         }
+    }
+
+    //
+    // Store selected status notification for the selected type of notification
+    // @param statusNotification - selected status notification
+    // @param key - type of notification
+    //
+    setStatusNotification(statusNotification, key) {
+        setSessionKey(key, statusNotification);
+    }
+
+    //
+    // Return selected request (key) StatusNotification response
+    // @param key - type of notification
+    //
+    statusNotification(key) {
+        return getSessionKey(key);
+    }
+
+    //
+    // Form and send response to UpdateFirmware request
+    // @param id - request ID to be used
+    //
+    handleRequest(id, key) {
+
+        var response = JSON.stringify([3,id,{}]);
+
+        switch (this.requestResponseType(key)) {
+            case ocpp.RESPONSE_REPLY:
+                response = JSON.stringify([3,id,{}]);
+                break;
+            case ocpp.RESPONSE_NOT_SUPPORTED:
+                response = JSON.stringify([4,id,ocpp.REQUEST_NOT_IMPLEMENTED]);
+                break;
+            case ocpp.RESPONSE_DO_NOT_REPLY:
+            default:
+                // do nothing: no reply
+                this.logMsg("Do Not Reply option selected for UpdateFirmware requests");
+                return;
+        }
+        this.wsSendData(response);
+    }
+
+    //
+    // Send FirmwareStatusNotification
+    // @param updateStatus - selected FW status notification (one of FW_UPDATE_*)
+    // @param key - type of notification / message
+    //
+    sendSelectedStatusNotification(updateStatus, key)
+    {
+        var id=generateId();
+        var sn_req = JSON.stringify([2, id, key, {
+            "status": updateStatus
+        }]);
+        this.logMsg("Sending StatusNotification for " + key + ": " + updateStatus);
+        this.wsSendData(sn_req);
+    }
+
+    //
+    // Store response to be used for request types (key) coming from CSMS
+    // @param diagResponse - selected response type to be used (one of RESPONSE_*)
+    // @param key - key / request to use provided response type to (also used as a key to store response type in a session)
+    //
+    setRequestResponseType(responseType, key) {
+        setSessionKey(key, responseType);
+    }
+
+    //
+    // Retrieve response to be used for request types (key) coming from CSMS
+    // @param key - key / request to use provided response type to (also used as a key to store response type in a session)
+    //
+    requestResponseType(key) {
+        return getSessionKey(key);
+    }
+
+    //
+    // Store reservation support flag
+    // @param isSupported - reservation support flag
+    //
+    setReservationSupport(isSupported) {
+        setSessionKey(ocpp.KEY_RESERVATIONS_SUPPORTED, isSupported);
+    }
+
+    //
+    // Return reservation support state
+    //
+    getReservationSupport() {
+        return getSessionKey(ocpp.KEY_RESERVATIONS_SUPPORTED);
+    }
+
+    //
+    // Send Data Transfer Request
+    // @param vendorId - vendorId to be passed to the request
+    // @param messageId - messageId to be passed to the request
+    // @param dataText - data to be passed to the request
+    //
+    sendDataRequest(vendorId, messageId, dataText) {
+        var id=generateId();
+        var sn_req = JSON.stringify([2, id, ocpp.REQUEST_DATA_TRANSFER, {
+            "vendorId": vendorId,
+            "messageId": messageId,
+            "data": dataText
+        }]);
+        this.logMsg("Sending Data Transfer Request");
+        this.wsSendData(sn_req);
     }
 }
