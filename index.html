@@ -34,9 +34,88 @@
                 <li class="nav-item">
                     <a class="nav-link" href="#tabcpparams" data-toggle="tab">Settings</a>
                 </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="#tabfwupdate" data-toggle="tab">Firmware Updates</a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="#tabdatareq" data-toggle="tab">Data Request</a>
+                </li>
             </ul>
 
             <div class="tab-content">
+                <div class="tab-pane mt-4" id="tabdatareq">
+                    <form id="datareq" class="card w-100">
+                        <div class="card-body">
+                            <div class="form-group">
+                                <label for="VENDORID">Vendor ID</label>
+                                <input type="text" class="form-control" id="VENDORID" name="VENDORID" maxlength="255">
+                            </div>
+                            <div class="form-group">
+                                <label for="MESSAGEID">Message ID</label>
+                                <input type="text" class="form-control" id="MESSAGEID" name="MESSAGEID" maxlength="50">
+                            </div>
+                            <div class="form-group">
+                                <label for="DATATEXT">Data</label>
+                                <textarea class="form-control" id="DATATEXT" name="DATATEXT"></textarea>
+                            </div>
+                            <button id="datareqbtn" type="button" class="btn btn-primary">Send Data</button>
+                        </div>
+                    </form>    
+                </div>
+
+                <div class="tab-pane mt-4" id="tabfwupdate">
+                    <form id="fwupdates" class="card w-100">
+                        <div class="card-body">
+                            <div class="form-group">
+                                <label for="FWACCEPTREJECT">Accept / Reject Firmware Updates</label>
+                                <select id="FWACCEPTREJECT" class="form-control" style="max-width: 20ch; margin-right:1ch;">
+                                    <option selected value="DoNotReply">Do Not Reply</option>
+                                    <option value="Reply">Reply</option>
+                                    <option value="NotSupported">Not Supported</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="FWSTATUS">FW Update: Current Status</label>
+                                <div class="d-flex">
+                                    <select id="FWSTATUS" class="form-control" style="max-width: 20ch; margin-right:1ch;">
+                                        <option selected value="Idle">Idle</option>
+                                        <option value="Downloading">Downloading</option>
+                                        <option value="Downloaded">Downloaded</option>
+                                        <option value="DownloadFailed">Download Failed</option>
+                                        <option value="Installing">Installing</option>
+                                        <option value="Installed">Installed</option>
+                                        <option value="InstallationFailed">Installation Failed</option>
+                                    </select>
+                                    <button id="fwstatusbtn" type="button" class="btn btn-primary">Send Status</button>
+                                </div>
+                            </div>
+                        </div>
+                    </form>    
+                    <form id="diagnostics" class="card w-100">
+                        <div class="card-body">
+                            <div class="form-group">
+                                <label for="DIAGACCEPTREJECT">Response to GetDiagnostics Request</label>
+                                <select id="DIAGACCEPTREJECT" class="form-control" style="max-width: 20ch; margin-right:1ch;">
+                                    <option selected value="DoNotReply">Do Not Reply</option>
+                                    <option value="Reply">Reply</option>
+                                    <option value="NotSupported">Not Supported</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="DIAGSTATUS">Diagnostics Status</label>
+                                <div class="d-flex">
+                                    <select id="DIAGSTATUS" class="form-control" style="max-width: 20ch; margin-right:1ch;">
+                                        <option selected value="Idle">Idle</option>
+                                        <option value="Uploading">Uploading</option>
+                                        <option value="Uploaded">Uploaded</option>
+                                        <option value="UploadFailed">Upload Failed</option>
+                                    </select>
+                                    <button id="diagstatusbtn" type="button" class="btn btn-primary">Send Status</button>
+                                </div>
+                            </div>
+                        </div>
+                    </form>    
+                </div>
                 <div class="tab-pane mt-4" id="tabcpparams">
                     <form id="cpparams">
                         <div class="form-group">
@@ -63,14 +142,27 @@
                 <div class="tab-pane mt-4" id="tabcon1">
                     <form id="con1">
                         <div class="form-group">
-                            <label for="AVAILABILITY_CON1">Connector Availability:</label>
+                            <label for="AVAILABILITY_CON1">Connector 1 Availability:</label>
                             <select id="AVAILABILITY_CON1" class="form-control" style="max-width: 16ch; margin-right:1ch;">
                                 <option selected value="Operative">Operative</option>
                                 <option disabled value="Inoperative">Inoperative</option>
                             </select>
                         </div>
                         <div class="form-group">
-                            <label for="STATUS_CON1">Connector Status:</label>
+                            <label for="CURRENT_STATUS_CON1">Current Connector 1 Status:</label>
+                            <span id="status1_badge_Available" class="indicator badge badge-primary">Available</span>
+                            <span id="status1_badge_Preparing" class="indicator badge badge-primary">Preparing</span>
+                            <span id="status1_badge_Charging" class="indicator badge badge-primary">Charging</span>
+                            <span id="status1_badge_SuspendedEV" class="indicator badge badge-warning">Suspended EV</span>
+                            <span id="status1_badge_SuspendedEVSE" class="indicator badge badge-warning">Suspended EVSE</span>
+                            <span id="status1_badge_Finishing" class="indicator badge badge-primary">Finishing</span>
+                            <span id="status1_badge_Reserved" class="indicator badge badge-warning">Reserved</span>
+                            <span id="status1_badge_Unavailable" class="indicator badge badge-light">Unavailable</span>
+                            <span id="status1_badge_Faulted" class="indicator badge badge-danger">Faulted</span>
+                            <span id="status1_badge_Unknown" class="indicator badge badge-light">Unknown</span>
+                        </div>
+                        <div class="form-group">
+                            <label for="STATUS_CON1">Set Connector 1 Status:</label>
                             <div class="d-flex">
                                 <select id="STATUS_CON1" class="form-control" style="max-width: 16ch; margin-right:1ch;">
                                     <option value="Available">Available</option>
@@ -86,10 +178,58 @@
                                 <button id="status1" type="button" class="btn btn-primary">Status Notification</button>
                             </div>
                         </div>
+                        <div class="form-group">
+                            <label for="CON1_LOCK_STATUS">Set Connector 1 Unlock Response:</label>
+                            <div class="d-flex">
+                                <select id="CON1_LOCK_STATUS" class="form-control" style="max-width: 16ch; margin-right:1ch;">
+                                    <option value="Unlocked">Unlocked</option>
+                                    <option value="UnlockFailed">Unlock Failed</option>
+                                    <option value="NotSupported">Not Supported</option>
+                                </select>
+                            </div>
+                        </div>
                     </form>
                 </div>
                 <div class="tab-pane mt-4" id="tabcon2">
-                    <p>I am not yet available...</p>
+                    <form id="con2">
+                        <div class="form-group">
+                            <label for="AVAILABILITY_CON2">Connector 2 Availability:</label>
+                            <select id="AVAILABILITY_CON2" class="form-control" style="max-width: 16ch; margin-right:1ch;">
+                                <option selected value="Operative">Operative</option>
+                                <option disabled value="Inoperative">Inoperative</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="CURRENT_STATUS_CON2">Current Connector 2 Status:</label>
+                            <span id="status2_badge_Available" class="indicator badge badge-primary">Available</span>
+                            <span id="status2_badge_Preparing" class="indicator badge badge-primary">Preparing</span>
+                            <span id="status2_badge_Charging" class="indicator badge badge-primary">Charging</span>
+                            <span id="status2_badge_SuspendedEV" class="indicator badge badge-warning">Suspended EV</span>
+                            <span id="status2_badge_SuspendedEVSE" class="indicator badge badge-warning">Suspended EVSE</span>
+                            <span id="status2_badge_Finishing" class="indicator badge badge-primary">Finishing</span>
+                            <span id="status2_badge_Reserved" class="indicator badge badge-warning">Reserved</span>
+                            <span id="status2_badge_Unavailable" class="indicator badge badge-light">Unavailable</span>
+                            <span id="status2_badge_Faulted" class="indicator badge badge-danger">Faulted</span>
+                            <span id="status2_badge_Unknown" class="indicator badge badge-light">Unknown</span>
+                        </div>
+                        <div class="form-group">
+                            <label for="STATUS_CON2">Set Connector 2 Status:</label>
+                            <div class="d-flex">
+                                <select id="STATUS_CON2" class="form-control" style="max-width: 16ch; margin-right:1ch;">
+                                    <option value="Available">Available</option>
+                                    <option value="Preparing">Preparing</option>
+                                    <option value="Charging">Charging</option>
+                                    <option value="SuspendedEV">Suspended EV</option>
+                                    <option value="SuspendedEVSE">Suspended EVSE</option>
+                                    <option value="Finishing">Finishing</option>
+                                    <option value="Reserved">Reserved</option>
+                                    <option value="Unavailable">Unavailable</option>
+                                    <option value="Faulted">Faulted</option>
+                                </select>
+                                <button id="status2" type="button" class="btn btn-primary">Status Notification</button>
+                            </div>
+                        </div>
+                    </form>
                 </div>
                 <div class="tab-pane active" id="tabcpsim">
                     <div class="row mt-4">
@@ -114,7 +254,7 @@
                                         <span id="badge_transaction" class="indicator badge badge-primary">In Transaction</span></p>  
                                     <div class="form-group">
                                         <label for="AVAILABILITY_CON0">Charge Point Availability:</label>
-                                        <select id="AVAILABILITY_CON0" class="form-control" style="max-width: 16ch; margin-right:1ch;">
+                                        <select id="AVAILABILITY_CON0" class="form-control" style="max-width: 20ch; margin-right:1ch;">
                                             <option selected value="Operative">Operative</option>
                                             <option disabled value="Inoperative">Inoperative</option>
                                         </select>
@@ -122,7 +262,7 @@
                                     <div class="form-group">
                                         <label for="STATUS_CON0">Charge Point Status:</label>
                                         <div class="d-flex">
-                                            <select id="STATUS_CON0" class="form-control" style="max-width: 16ch; margin-right:1ch;">
+                                            <select id="STATUS_CON0" class="form-control" style="max-width: 20ch; margin-right:1ch;">
                                                 <option value="Available">Available</option>
                                                 <option value="Unavailable">Unavailable</option>
                                                 <option value="Faulted">Faulted</option>
@@ -131,9 +271,27 @@
                                         </div>
                                     </div>
                                     <div class="form-group">
+                                        <label for="currentConnectorId">Current Connector: </label>
+                                        <div class="d-flex">
+                                            <select id="currentConnectorId" class="form-control" style="max-width: 20ch; margin-right:1ch;">
+                                                <option value="1">Connector ID 1</option>
+                                                <option value="2">Connector ID 2</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="reservationSupport">Reservations Support: </label>
+                                        <div class="d-flex">
+                                            <select id="reservationSupport" class="form-control" style="max-width: 20ch; margin-right:1ch;">
+                                                <option selected value="Supported">Supported</option>
+                                                <option value="Rejected">Rejected</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                    <div class="form-group">
                                         <label for="metervalue">Meter value: </label>
                                         <div class="d-flex">
-                                            <input type="text" id="metervalue" type="text" name="mv" value="1" style="max-width: 12ch">
+                                            <input type="text" id="metervalue" type="text" name="mv" value="1" style="max-width: 16ch">
                                             <div class="input-group-btn">
                                                 <button id="mvplus" class="btn btn-secondary"><span class="fa fa-plus"></span></button>
                                                 <button id="mv" type="button" class="btn btn-primary" style="margin-left: 1ch">Send Meter Value</button>
