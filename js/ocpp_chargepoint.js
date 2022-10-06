@@ -432,8 +432,18 @@ export default class ChargePoint {
     // @param transactionId the id of the transaction to stop
     // @param tagId the id of the RFID tag currently authorized on the CP
     //
-    stopTransactionWithId(transactionId,tagId="DEADBEEF"){
-        var mv=this.meterValue();
+    stopTransactionWithId(transactionId, tagId="DEADBEEF"){
+        // Find connector on which transaction is ongoing
+        // do it by matching transaction id key in session
+        var connectorId = 1;
+        for (var i = 1; i <= ocpp.CONFIG_MAX_CONNECTORS; i++) {
+            if (getSessionKey(ocpp.KEY_ACTIVE_TRANSACTION_ID + i.toString()) == transactionId) {
+                connectorId = i;
+                break;
+            }
+        }
+
+        var mv=this.meterValue(connectorId);
         this.logMsg("Stopping Transaction with id "+transactionId+" (meterValue="+mv+")");
         var id=generateId();
         var stopParams = {           

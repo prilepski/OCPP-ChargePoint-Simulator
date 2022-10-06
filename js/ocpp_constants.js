@@ -104,3 +104,6 @@ export const STATE_ACCEPTED = "Accepted";
 export const STATE_FAULTED = "Faulted";
 export const STATE_OCCUPIED = "Occupied";
 export const STATE_REJECTED = "Rejected";
+
+// COnfiguration parameters
+export const CONFIG_MAX_CONNECTORS = 2;
