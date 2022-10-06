@@ -309,6 +309,7 @@ export default class ChargePoint {
             case ocpp.REQUEST_FIRMWARE_STATUS_NOTIFICATION:
             case ocpp.REQUEST_DIAGNOSTICS_STATUS_NOTIFICATION:
             case ocpp.REQUEST_DATA_TRANSFER:
+            case ocpp.REQUEST_STATUS_NOTIFICATION:
                 // no further actions needed here
                 break;
             case ocpp.REQUEST_START_TRANSACTION:
@@ -698,7 +699,10 @@ export default class ChargePoint {
     //
     connectorStatus(c) {
         var key = ocpp.KEY_CONN_STATUS + c;
-        return getSessionKey(key);
+        var status = getSessionKey(key);
+        if ("" == status)
+            status = ocpp.CONN_UNAVAILABLE;
+        return status;
     }
     
     //
