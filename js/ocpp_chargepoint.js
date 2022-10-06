@@ -7,7 +7,7 @@ import * as ocpp from './ocpp_constants.js'
 //
 //
 function formatDate(date) {
-    var day = String(date.getDate()),
+/*    var day = String(date.getDate()),
         monthIndex = String(date.getMonth() + 1),
         year = date.getFullYear(),
         h = date.getHours(),
@@ -29,7 +29,12 @@ function formatDate(date) {
     if (s.length < 2) {
         s = ('0' + s.slice(-2));
     }
+
+    var strCustom = year + '-' + monthIndex + '-' + day + 'T' + h + ':' + m + ':' + s + 'Z';
     return year + '-' + monthIndex + '-' + day + 'T' + h + ':' + m + ':' + s + 'Z';
+*/
+    var strISO = date.toISOString();
+    return strISO;
 }
 
 function generateId() {
@@ -310,6 +315,7 @@ export default class ChargePoint {
             case ocpp.REQUEST_DIAGNOSTICS_STATUS_NOTIFICATION:
             case ocpp.REQUEST_DATA_TRANSFER:
             case ocpp.REQUEST_STATUS_NOTIFICATION:
+            case ocpp.REQUEST_METER_VALUES:
                 // no further actions needed here
                 break;
             case ocpp.REQUEST_START_TRANSACTION:
