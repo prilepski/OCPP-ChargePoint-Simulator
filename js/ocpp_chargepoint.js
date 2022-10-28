@@ -151,7 +151,7 @@ export default class ChargePoint {
     //
     logMsg(msg) {
         if (this._loggingCb) {
-            msg = '[OCPP] '+msg;
+            msg = new Date().toLocaleString() + ': [OCPP] '+msg;
             this._loggingCb(msg);
         }
     }
@@ -289,6 +289,21 @@ export default class ChargePoint {
             case ocpp.REQUEST_GET_DIAGNOSTICS:
                 this.logMsg("Reception of a GetDiagnostics request");
                 this.handleRequest(id, ocpp.KEY_GET_DIAGNOSTICS_RESPONSE);
+                break;
+            case ocpp.REQUEST_GET_CONFIGURATION:
+                this.logMsg("Reception of a GetConfiguration request");
+                var strKey = "";
+                if(payload["key"]) { 
+                    strKey = payload["key"];
+                }
+
+                if (strKey == "") {
+                    this.logMsg("Reception of a GetConfiguration request for all keys");
+                }
+                else {
+                    this.logMsg("Reception of a GetConfiguration request for: " + strKey);
+                }
+                this.handleConfigurationRequest(id, strKey);
                 break;
     
             default:
@@ -883,5 +898,37 @@ export default class ChargePoint {
         }]);
         this.logMsg("Sending Data Transfer Request");
         this.wsSendData(sn_req);
+    }
+
+    //
+    // Simulate fully offline charging session with all data sent to the back-end upon connecting
+    //
+    simulateOfflineSession() {
+    }
+
+    //
+    // Send GetConfiguration request response
+    // @param strKey - key requested. Empty for all keys
+    //
+    handleConfigurationRequest(id, strKey = "") {
+        var knownKeys = {
+            "GetConfigurationMaxKeys": 2,
+            " LocalPreAuthorize": true,
+            "LocalAuthorizeOffline": true
+        };
+// OCPP] SEND: [2,"XZc12R4qohCVDiY7YNLc3hALTygyKOR5KTRp","MeterValues",{"connectorId":"1","transactionId":"","meterValue":[{"timestamp":"2022-10-18T17:42:43.269Z","sampledValue":[{"value":"70"}]}]}]
+
+        var id=generateId();
+
+        // TODO: handle request for specific keys. Not needed for now
+        //var jsonKeys = JSON.parse(strKey);
+        var jsonKeys = JSON.stringify(knownKeys);
+        var confResp = JSON.stringify([3, id, {"configurationKey": [knownKeys]}]);
+        this.wsSendData(confResp);                    
+        /*
+mvreq = JSON.stringify([2, id, ocpp.REQUEST_METER_VALUES, {"connectorId": c, "transactionId": ssid, "meterValue": [{"timestamp": formatDate(new Date()), "sampledValue": [{"value": meter}]}]}]);
+this.logMsg("Send Meter Values: "+meter+" (connector " +c+")");
+this.wsSendData(mvreq);        
+*/
     }
 }

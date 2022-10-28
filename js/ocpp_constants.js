@@ -26,6 +26,7 @@ export const REQUEST_HEARTBEAT = "Heartbeat";
 export const REQUEST_STATUS_NOTIFICATION = "StatusNotification";
 export const REQUEST_NOT_IMPLEMENTED = "NotImplemented";
 export const REQUEST_DATA_TRANSFER = "DataTransfer";
+export const REQUEST_GET_CONFIGURATION = "GetConfiguration";
 
 // Keys (stored in local or session storage)
 export const KEY_CP_STATUS    = 'cp_status';

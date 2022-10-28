@@ -40,9 +40,25 @@
                 <li class="nav-item">
                     <a class="nav-link" href="#tabdatareq" data-toggle="tab">Data Request</a>
                 </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="#taboffline" data-toggle="tab">Offline Experiment</a>
+                </li>
             </ul>
 
             <div class="tab-content">
+                <div class="tab-pane mt-4" id="taboffline">
+                    <form id="offlineform" class="card w-100">
+                        <div class="card-body">
+                            <button id="offlinesession" type="button" class="btn btn-primary">Fully Offline Session</button>
+                        </div>
+                        <div class="card-body">
+                            <button id="offlinestart" type="button" class="btn btn-primary">Offline Start Session</button>
+                        </div>
+                        <div class="card-body">
+                            <button id="offlinestop" type="button" class="btn btn-primary">Offline Stop Session</button>
+                        </div>
+                    </form>    
+                </div>
                 <div class="tab-pane mt-4" id="tabdatareq">
                     <form id="datareq" class="card w-100">
                         <div class="card-body">
